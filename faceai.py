@@ -1,22 +1,19 @@
 import cv2
 import torch
 import torch.nn as nn
-import os.path
 from model import SimpleCNN
+import mediapipe as mp
 
-smile_folder = r"C:\Users\Dima\faceai\data\smile"
-neutral_folder = r"C:\Users\Dima\faceai\data\neutral"
-
-smile_count=0
-neutral_count=0
+mp_face_detection = mp.solutions.face_detection
+face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
 
 model = SimpleCNN()
 model.load_state_dict(torch.load("face_model.pth"))
 model.eval()
 
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-)
+#face_cascade = cv2.CascadeClassifier(
+  #  cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+#)
 
 cap = cv2.VideoCapture(0)
 
@@ -27,52 +24,45 @@ while True:
     if not ret:
         break
     key= cv2.waitKey(1) & 0xFF
+    
+    ih, iw, _ = frame.shape
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = face_detection.process(rgb_frame)
+    if results.detections:
+        for detection in results.detections:
+            bbox = detection.location_data.relative_bounding_box
+            x=int(bbox.xmin*iw)
+            y=int(bbox.ymin*ih)
+            w = int(bbox.width * iw)
+            h = int(bbox.height * ih)
 
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray_frame, 1.1, 5)
-    for (x, y, w, h) in faces:
-        face = frame[y:y+h, x:x+w]
+            x, y = max(0, x), max(0, y)
+            face = frame[y:y+h, x:x+w]
+            if face.size == 0:
+                continue
+            try:
+                gray_face=cv2.cvtColor(face,cv2.COLOR_BGR2GRAY)
+                resized=cv2.resize(gray_face,(64,64))
 
-        try:
-            gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-            faces_resized = cv2.resize(gray_face, (64, 64))
+                tensor=torch.from_numpy(resized).float()/255.0
+                tensor=tensor.unsqueeze(0).unsqueeze(0)
 
-            tensor = torch.from_numpy(faces_resized).float() / 255.0
-            tensor = tensor.unsqueeze(0).unsqueeze(0)
-
-            with torch.no_grad():
-                prediction = model(tensor)
-                predicted_class = torch.argmax(prediction, dim=1).item()
-
-            label_text = class_name[predicted_class]
-
-            color = (0, 255, 0) if predicted_class == 1 else (255, 0, 0)
-            if key==ord('s'):
-                smile_count+=1
-                file_name=f"smile_{smile_count}.jpg"
-                full_path = os.path.join(smile_folder, file_name)
-                cv2.imwrite(full_path,faces_resized)
-                print(f"Сохранено в smile: {full_path}")
-            if key==ord('n'):
-                neutral_count+=1
-                file_name=f"netural_{neutral_count}.jpg"
-                full_path = os.path.join(neutral_folder, file_name)
-                cv2.imwrite(full_path,faces_resized)
-                print(f"Сохранено в netural: {full_path}")
-            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-            cv2.putText(
-                frame,
-                label_text,
-                (x, y - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                color,
-                2
-            )
-
-        except Exception as e:
-            print(f"Ошибка обработки лица: {e}")
-            continue
+                with torch.inference_mode():
+                    prediction = model(tensor)
+                    probabilities = torch.softmax(prediction, dim=1)
+                    conf_tensor, pred_class_tensor = torch.max(probabilities, dim=1)
+                    
+                    confidence = conf_tensor.item() * 100
+                    predicted_class = pred_class_tensor.item()
+                label_text = f"{class_name[predicted_class]} ({confidence:.1f}%)"
+                color = (0, 255, 0) if predicted_class == 1 else (255, 0, 0)
+                
+                cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                cv2.putText(frame, label_text, (x, y - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)                             
+            except Exception as e:
+                print(f"Ошибка обработки лица: {e}")
+                continue
 
     cv2.imshow("Camera", frame)
   
