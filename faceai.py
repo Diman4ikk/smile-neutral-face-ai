@@ -1,13 +1,14 @@
 import cv2
 import torch
 import torch.nn as nn
-from model import SimpleCNN
+from model import res_net_model
 import mediapipe as mp
 
 mp_face_detection = mp.solutions.face_detection
 face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
-
-model = SimpleCNN()
+model=res_net_model()
+num_ftrs=model.fc.in_features
+model.fc=nn.Linear(num_ftrs,2)
 model.load_state_dict(torch.load("face_model.pth"))
 model.eval()
 
@@ -24,7 +25,7 @@ while True:
     if not ret:
         break
     key= cv2.waitKey(1) & 0xFF
-    
+    frame = cv2.flip(frame, 1)
     ih, iw, _ = frame.shape
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = face_detection.process(rgb_frame)
@@ -41,11 +42,12 @@ while True:
             if face.size == 0:
                 continue
             try:
-                gray_face=cv2.cvtColor(face,cv2.COLOR_BGR2GRAY)
-                resized=cv2.resize(gray_face,(64,64))
+                
+                resized=cv2.resize(face,(64,64))
 
                 tensor=torch.from_numpy(resized).float()/255.0
-                tensor=tensor.unsqueeze(0).unsqueeze(0)
+                tensor = tensor.permute(2, 0, 1)
+                tensor = tensor.unsqueeze(0)
 
                 with torch.inference_mode():
                     prediction = model(tensor)

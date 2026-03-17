@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
-
+from torchvision import models
+"""""
 class SimpleCNN(nn.Module):
     def __init__(self):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3,padding=1)
+        self.conv1 = nn.Conv2d(3, 8, kernel_size=3,padding=1)
         self.bn1=nn.BatchNorm2d(8)
         self.relu1 = nn.ReLU()
         self.pool1 = nn.MaxPool2d(2, 2)
@@ -25,3 +26,11 @@ class SimpleCNN(nn.Module):
         x=self.dropout(x)
         x = self.fc(x)
         return x
+        """
+def res_net_model():
+    model=models.resnet18(weights='DEFAULT')
+
+    num_ftrs=model.fc.in_features
+    model.fc=nn.Linear(num_ftrs,2)
+    
+    return model
