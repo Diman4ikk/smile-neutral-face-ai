@@ -31,6 +31,9 @@ def res_net_model():
     model=models.resnet18(weights='DEFAULT')
 
     num_ftrs=model.fc.in_features
-    model.fc=nn.Linear(num_ftrs,2)
+    model.fc=nn.Sequential(
+        nn.Dropout(p=0.5),
+        nn.Linear(num_ftrs,7)
+    )
     
     return model

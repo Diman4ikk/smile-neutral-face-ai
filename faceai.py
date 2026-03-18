@@ -3,12 +3,13 @@ import torch
 import torch.nn as nn
 from model import res_net_model
 import mediapipe as mp
+from collections import deque
+import statistics
 
 mp_face_detection = mp.solutions.face_detection
 face_detection = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
 model=res_net_model()
-num_ftrs=model.fc.in_features
-model.fc=nn.Linear(num_ftrs,2)
+emotion_history = deque(maxlen=5)
 model.load_state_dict(torch.load("face_model.pth"))
 model.eval()
 
@@ -18,7 +19,15 @@ model.eval()
 
 cap = cv2.VideoCapture(0)
 
-class_name = {0: "Neutral", 1: "Smile"}
+class_name = {
+    0: "Angry", 
+    1: "Disgust", 
+    2: "Fear", 
+    3: "Neutral", 
+    4: "Sad", 
+    5: "Smile", 
+    6: "Surprise"
+}
 
 while True:
     ret, frame = cap.read()
@@ -44,8 +53,10 @@ while True:
             try:
                 
                 resized=cv2.resize(face,(64,64))
-
-                tensor=torch.from_numpy(resized).float()/255.0
+                gray_face = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+                rgb_gray_face = cv2.cvtColor(gray_face, cv2.COLOR_GRAY2RGB)
+                tensor=torch.from_numpy(rgb_gray_face).float()/255.0
+                tensor=(tensor-0.5)/0.5
                 tensor = tensor.permute(2, 0, 1)
                 tensor = tensor.unsqueeze(0)
 
@@ -56,8 +67,12 @@ while True:
                     
                     confidence = conf_tensor.item() * 100
                     predicted_class = pred_class_tensor.item()
+                emotion_history.append(predicted_class)
+
+                smoothed_class = statistics.mode(emotion_history)
                 label_text = f"{class_name[predicted_class]} ({confidence:.1f}%)"
-                color = (0, 255, 0) if predicted_class == 1 else (255, 0, 0)
+                colors = {0: (0,0,255), 3: (0,255,0), 6: (255,0,0)} # Можно расширить
+                color = colors.get(predicted_class, (255, 255, 255))
                 
                 cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
                 cv2.putText(frame, label_text, (x, y - 10), 

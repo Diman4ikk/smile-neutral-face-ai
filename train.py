@@ -12,22 +12,23 @@ model=res_net_model().to(device)
 data_transforms=transforms.Compose([
     transforms.Resize((64,64)),#eсли железо норм то 224
     transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomRotation(degrees=15),  
+    transforms.RandomRotation(degrees=45),  
     transforms.ColorJitter(brightness=0.2),
     transforms.ToTensor(),
-    
-    transforms.Normalize((0.5,), (0.5,))
+    transforms.Grayscale(num_output_channels=3),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 val_transforms=transforms.Compose([
    transforms.Resize((64,64)), 
    transforms.ToTensor(),
-   
-   transforms.Normalize((0.5,), (0.5,))
+   transforms.Grayscale(num_output_channels=3),
+  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 data_dirr='./data'
 full_train_dataset=datasets.ImageFolder(root=data_dirr,transform=data_transforms)
 full_val_dataset=datasets.ImageFolder(root=data_dirr,transform=val_transforms)
-
+print("--- КЛЮЧ К ТВОЕМУ ДАТАСЕТУ ---")
+print(full_train_dataset.class_to_idx)
 dataset_size=len(full_train_dataset)
 train_size= int(0.8*dataset_size)
 val_size=dataset_size-train_size
@@ -42,9 +43,10 @@ val_dataset=Subset(full_val_dataset,indices[train_size:])
 
 train_loader=DataLoader(train_dataset,batch_size=16,shuffle=True)
 val_loader=DataLoader(val_dataset,batch_size=16,shuffle=False)
-
+for param in model.parameters():
+    param.requires_grad = True
 criterion=nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=2)
 
 for epoch in range(15):
